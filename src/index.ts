@@ -10,6 +10,8 @@ import {
 } from "./auth.js";
 import { encodeRfc2822 } from "./email.js";
 
+export const GMAIL_MESSAGES_PAGINATION_SUPPORTED = true;
+
 const configSchema = Type.Object({
   credentialsPath: Type.String({
     default: "~/.openclaw/secrets/gmail-credentials.json",
@@ -123,6 +125,7 @@ export default defineToolPlugin({
         );
         return {
           count: res.data.messages?.length ?? 0,
+          paginationSupported: GMAIL_MESSAGES_PAGINATION_SUPPORTED,
           nextPageToken: res.data.nextPageToken,
           messages: res.data.messages ?? [],
         };

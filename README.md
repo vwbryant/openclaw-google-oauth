@@ -60,7 +60,9 @@ A single OpenClaw plugin that exposes 24 agent-callable tools spanning six Googl
 
 `gmail_messages_list` supports pagination. When a response contains
 `nextPageToken`, pass that value as `pageToken` on the next call while keeping
-the same query and result limit.
+the same query and result limit. Responses include `paginationSupported: true`
+so external orchestrators can verify the continuation contract before saving a
+cursor.
 
 ## Why direct OAuth?
 

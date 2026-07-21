@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { getToolPluginMetadata } from "openclaw/plugin-sdk/tool-plugin";
-import plugin, { buildGmailMessagesListRequest } from "./index.js";
+import plugin, {
+  buildGmailMessagesListRequest,
+  GMAIL_MESSAGES_PAGINATION_SUPPORTED,
+} from "./index.js";
 
 const expectedTools = [
   "google_auth_start",
@@ -79,6 +82,7 @@ describe("tangleclaw-google-oauth plugin metadata", () => {
     }).properties;
 
     expect(properties).toHaveProperty("pageToken");
+    expect(GMAIL_MESSAGES_PAGINATION_SUPPORTED).toBe(true);
     expect(
       buildGmailMessagesListRequest({
         query: "is:unread",

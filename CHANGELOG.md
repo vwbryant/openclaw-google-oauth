@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `gmail_messages_list` now accepts a `pageToken` returned by a previous call,
+  allowing callers to process every page of a Gmail search result.
+
 ## [0.4.0] — 2026-07-06
 
 ### Changed

@@ -29,11 +29,28 @@ function authConfig(config: { credentialsPath: string; tokenPath: string }): Aut
   };
 }
 
+export function buildGmailMessagesListRequest({
+  query,
+  maxResults,
+  pageToken,
+}: {
+  query?: string;
+  maxResults?: number;
+  pageToken?: string;
+}) {
+  return {
+    userId: "me",
+    q: query,
+    maxResults: maxResults ?? 10,
+    pageToken,
+  };
+}
+
 export default defineToolPlugin({
   id: "tangleclaw-google-oauth",
   name: "TangleClaw Google OAuth",
   description:
-    "OpenClaw plugin for Google Workspace — Gmail (send/read/label), Calendar (events), Drive (list/share), Docs (create/read/append), Sheets (create/read/append), Slides (create/read) via direct OAuth. Your OAuth client talks straight to Google. No third-party gateway, no IMAP App Password.",
+    "Google Workspace tools for your OpenClaw agent — Gmail, Calendar, Drive, Docs, Sheets, Slides via direct OAuth. 24 tools from one OAuth client. No MCP server to run, no third-party gateway, no IMAP App Password workaround. Install once, complete the OAuth dance, done.",
   configSchema,
   tools: (tool) => [
     // ── OAuth setup ───────────────────────────────────────────────────────
@@ -88,16 +105,20 @@ export default defineToolPlugin({
         maxResults: Type.Optional(
           Type.Integer({ minimum: 1, maximum: 100, default: 10 })
         ),
+        pageToken: Type.Optional(
+          Type.String({
+            description:
+              "Continuation token returned as nextPageToken by a previous gmail_messages_list call.",
+          })
+        ),
       }),
-      async execute({ query, maxResults }, config) {
+      async execute({ query, maxResults, pageToken }, config) {
         const auth = await createOAuthClient(authConfig(config));
         const gmail = google.gmail({ version: "v1", auth });
         const res = await withTimeout(
-          gmail.users.messages.list({
-            userId: "me",
-            q: query,
-            maxResults: maxResults ?? 10,
-          }),
+          gmail.users.messages.list(
+            buildGmailMessagesListRequest({ query, maxResults, pageToken })
+          ),
           "gmail.messages.list"
         );
         return {

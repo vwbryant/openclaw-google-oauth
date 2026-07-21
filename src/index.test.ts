@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { getToolPluginMetadata } from "openclaw/plugin-sdk/tool-plugin";
-import plugin from "./index.js";
+import plugin, { buildGmailMessagesListRequest } from "./index.js";
 
 const expectedTools = [
   "google_auth_start",
@@ -70,5 +70,26 @@ describe("tangleclaw-google-oauth plugin metadata", () => {
     const props = (metadata!.configSchema as { properties?: Record<string, unknown> }).properties;
     expect(props).toHaveProperty("credentialsPath");
     expect(props).toHaveProperty("tokenPath");
+  });
+
+  it("exposes Gmail pagination and forwards continuation tokens", () => {
+    const gmailList = metadata!.tools.find((tool) => tool.name === "gmail_messages_list");
+    const properties = (gmailList!.parameters as {
+      properties?: Record<string, unknown>;
+    }).properties;
+
+    expect(properties).toHaveProperty("pageToken");
+    expect(
+      buildGmailMessagesListRequest({
+        query: "is:unread",
+        maxResults: 25,
+        pageToken: "next-page",
+      })
+    ).toEqual({
+      userId: "me",
+      q: "is:unread",
+      maxResults: 25,
+      pageToken: "next-page",
+    });
   });
 });

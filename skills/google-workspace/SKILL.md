@@ -19,6 +19,9 @@ metadata: { "openclaw": { "emoji": "🔐", "requires": { "config": ["plugins.ent
 
 You have 24 direct-OAuth tools spanning Gmail, Calendar, Drive, Docs, Sheets, and Slides. They talk straight to `googleapis.com` (no MCP, no third-party gateway, no IMAP App Password). Per-file Google ACLs decide what's read-only vs writable.
 
+Do not narrate an intended Google operation without making the corresponding
+tool call in the same turn.
+
 ## When this skill applies — and when it does not
 
 Activate only when the user **explicitly asks for an operation on their Google
@@ -65,7 +68,7 @@ What you must NOT do after an error: explain what you're going to do, narrate a 
 | Need | Tool | Notes |
 | --- | --- | --- |
 | Send an email | `gmail_message_send` | Plain text body. Pass `to`, `subject`, `body`; optional `cc`, `bcc`, `replyTo`. |
-| Check inbox / search messages | `gmail_messages_list` | Default: 10 most recent. Filter with Gmail syntax: `is:unread`, `newer_than:1d`, `from:alice@example.com`, `subject:invoice`, `has:attachment`. |
+| Check inbox / search messages | `gmail_messages_list` | Default: 10 most recent. Filter with Gmail syntax: `is:unread`, `newer_than:1d`, `from:alice@example.com`, `subject:invoice`, `has:attachment`. Pass a returned `nextPageToken` as `pageToken` to continue the same search. |
 | Read one message's full body | `gmail_message_get` | Pass the `id` from `gmail_messages_list`. |
 | Star / archive / label / mark read | `gmail_message_modify` | `addLabelIds`/`removeLabelIds`: `STARRED`, `UNREAD` (remove to mark read), `INBOX` (remove to archive). |
 | Delete a message | `gmail_message_trash` | Moves to Trash (recoverable 30 days). |

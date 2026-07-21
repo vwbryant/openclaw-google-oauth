@@ -58,6 +58,10 @@ A single OpenClaw plugin that exposes 24 agent-callable tools spanning six Googl
 | Sheets | `sheets_create`, `sheets_get`, `sheets_values_get`, `sheets_values_append` |
 | Slides | `slides_create`, `slides_get` |
 
+`gmail_messages_list` supports pagination. When a response contains
+`nextPageToken`, pass that value as `pageToken` on the next call while keeping
+the same query and result limit.
+
 ## Why direct OAuth?
 
 Other Google integrations for AI agents typically come as one of:

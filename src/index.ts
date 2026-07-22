@@ -24,9 +24,13 @@ const configSchema = Type.Object({
   }),
 });
 
-function authConfig(config: { credentialsPath: string; tokenPath: string }): AuthConfig {
+export function resolveAuthConfig(config: {
+  credentialsPath: string;
+  tokenPath: string;
+}): AuthConfig {
   return {
-    credentialsPath: config.credentialsPath,
+    credentialsPath:
+      process.env.GOOGLE_OAUTH_CREDENTIALS_PATH?.trim() || config.credentialsPath,
     tokenPath: config.tokenPath,
   };
 }
@@ -63,7 +67,7 @@ export default defineToolPlugin({
         "Start a fresh Google OAuth authorization flow. Returns a URL the human must open in a browser to grant access. Only call this if the existing token has expired (invalid_grant errors) or if scopes need to be widened. Reads OAuth client credentials from configured credentialsPath.",
       parameters: Type.Object({}),
       async execute(_params, config) {
-        const url = await buildAuthUrl(authConfig(config));
+        const url = await buildAuthUrl(resolveAuthConfig(config));
         return {
           authUrl: url,
           instructions:
@@ -82,7 +86,7 @@ export default defineToolPlugin({
         }),
       }),
       async execute({ code }, config) {
-        const result = await exchangeCode(authConfig(config), code);
+        const result = await exchangeCode(resolveAuthConfig(config), code);
         return {
           ok: true,
           tokenPath: result.tokenPath,
@@ -115,7 +119,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute({ query, maxResults, pageToken }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const gmail = google.gmail({ version: "v1", auth });
         const res = await withTimeout(
           gmail.users.messages.list(
@@ -151,7 +155,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute({ id, format }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const gmail = google.gmail({ version: "v1", auth });
         const res = await withTimeout(
           gmail.users.messages.get({
@@ -178,7 +182,7 @@ export default defineToolPlugin({
         replyTo: Type.Optional(Type.String()),
       }),
       async execute(params, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const gmail = google.gmail({ version: "v1", auth });
         const raw = encodeRfc2822(params);
         const res = await withTimeout(
@@ -202,7 +206,7 @@ export default defineToolPlugin({
         removeLabelIds: Type.Optional(Type.Array(Type.String())),
       }),
       async execute({ id, addLabelIds, removeLabelIds }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const gmail = google.gmail({ version: "v1", auth });
         const res = await withTimeout(
           gmail.users.messages.modify({
@@ -227,7 +231,7 @@ export default defineToolPlugin({
         id: Type.String({ description: "Gmail message id (from gmail_messages_list)." }),
       }),
       async execute({ id }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const gmail = google.gmail({ version: "v1", auth });
         const res = await withTimeout(
           gmail.users.messages.trash({ userId: "me", id }),
@@ -255,7 +259,7 @@ export default defineToolPlugin({
         singleEvents: Type.Optional(Type.Boolean({ default: true })),
       }),
       async execute(params, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const calendar = google.calendar({ version: "v3", auth });
         const res = await withTimeout(
           calendar.events.list({
@@ -291,7 +295,7 @@ export default defineToolPlugin({
         attendees: Type.Optional(Type.Array(Type.String())),
       }),
       async execute(params, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const calendar = google.calendar({ version: "v3", auth });
         const res = await withTimeout(
           calendar.events.insert({
@@ -324,7 +328,7 @@ export default defineToolPlugin({
         eventId: Type.String(),
       }),
       async execute({ calendarId, eventId }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const calendar = google.calendar({ version: "v3", auth });
         const res = await withTimeout(
           calendar.events.get({
@@ -346,7 +350,7 @@ export default defineToolPlugin({
         eventId: Type.String({ description: "Event id (from calendar_events_list)." }),
       }),
       async execute({ calendarId, eventId }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const calendar = google.calendar({ version: "v3", auth });
         await withTimeout(
           calendar.events.delete({
@@ -377,7 +381,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute({ query, pageSize }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const drive = google.drive({ version: "v3", auth });
         const res = await withTimeout(
           drive.files.list({
@@ -403,7 +407,7 @@ export default defineToolPlugin({
         fileId: Type.String(),
       }),
       async execute({ fileId }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const drive = google.drive({ version: "v3", auth });
         const res = await withTimeout(
           drive.files.get({
@@ -440,7 +444,7 @@ export default defineToolPlugin({
         sendNotificationEmail: Type.Optional(Type.Boolean({ default: false })),
       }),
       async execute(params, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const drive = google.drive({ version: "v3", auth });
         const res = await withTimeout(
           drive.permissions.create({
@@ -466,7 +470,7 @@ export default defineToolPlugin({
         fileId: Type.String({ description: "Drive file id (from drive_files_list or the corresponding create tool's response)." }),
       }),
       async execute({ fileId }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const drive = google.drive({ version: "v3", auth });
         const res = await withTimeout(
           drive.files.update({
@@ -490,7 +494,7 @@ export default defineToolPlugin({
         title: Type.String(),
       }),
       async execute({ title }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const docs = google.docs({ version: "v1", auth });
         const res = await withTimeout(
           docs.documents.create({ requestBody: { title } }),
@@ -512,7 +516,7 @@ export default defineToolPlugin({
         documentId: Type.String(),
       }),
       async execute({ documentId }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const docs = google.docs({ version: "v1", auth });
         const res = await withTimeout(
           docs.documents.get({ documentId }),
@@ -531,7 +535,7 @@ export default defineToolPlugin({
         text: Type.String(),
       }),
       async execute({ documentId, text }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const docs = google.docs({ version: "v1", auth });
         const docRes = await withTimeout(
           docs.documents.get({ documentId, fields: "body(content(endIndex))" }),
@@ -570,7 +574,7 @@ export default defineToolPlugin({
         title: Type.String(),
       }),
       async execute({ title }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const sheets = google.sheets({ version: "v4", auth });
         const res = await withTimeout(
           sheets.spreadsheets.create({
@@ -593,7 +597,7 @@ export default defineToolPlugin({
         spreadsheetId: Type.String(),
       }),
       async execute({ spreadsheetId }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const sheets = google.sheets({ version: "v4", auth });
         const res = await withTimeout(
           sheets.spreadsheets.get({ spreadsheetId }),
@@ -612,7 +616,7 @@ export default defineToolPlugin({
         range: Type.String(),
       }),
       async execute({ spreadsheetId, range }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const sheets = google.sheets({ version: "v4", auth });
         const res = await withTimeout(
           sheets.spreadsheets.values.get({ spreadsheetId, range }),
@@ -638,7 +642,7 @@ export default defineToolPlugin({
         ),
       }),
       async execute(params, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const sheets = google.sheets({ version: "v4", auth });
         const res = await withTimeout(
           sheets.spreadsheets.values.append({
@@ -663,7 +667,7 @@ export default defineToolPlugin({
         title: Type.String(),
       }),
       async execute({ title }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const slides = google.slides({ version: "v1", auth });
         const res = await withTimeout(
           slides.presentations.create({ requestBody: { title } }),
@@ -684,7 +688,7 @@ export default defineToolPlugin({
         presentationId: Type.String(),
       }),
       async execute({ presentationId }, config) {
-        const auth = await createOAuthClient(authConfig(config));
+        const auth = await createOAuthClient(resolveAuthConfig(config));
         const slides = google.slides({ version: "v1", auth });
         const res = await withTimeout(
           slides.presentations.get({ presentationId }),

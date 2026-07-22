@@ -3,6 +3,7 @@ import { getToolPluginMetadata } from "openclaw/plugin-sdk/tool-plugin";
 import plugin, {
   buildGmailMessagesListRequest,
   GMAIL_MESSAGES_PAGINATION_SUPPORTED,
+  resolveAuthConfig,
 } from "./index.js";
 
 const expectedTools = [
@@ -73,6 +74,30 @@ describe("tangleclaw-google-oauth plugin metadata", () => {
     const props = (metadata!.configSchema as { properties?: Record<string, unknown> }).properties;
     expect(props).toHaveProperty("credentialsPath");
     expect(props).toHaveProperty("tokenPath");
+  });
+
+  it("uses an operator-mounted OAuth client without changing tenant plugin config", () => {
+    const previous = process.env.GOOGLE_OAUTH_CREDENTIALS_PATH;
+    process.env.GOOGLE_OAUTH_CREDENTIALS_PATH =
+      "/run/secrets/taskbotz-google-oauth-client.json";
+
+    try {
+      expect(
+        resolveAuthConfig({
+          credentialsPath: "~/.openclaw/secrets/gmail-credentials.json",
+          tokenPath: "~/.openclaw/secrets/gmail-token.json",
+        })
+      ).toEqual({
+        credentialsPath: "/run/secrets/taskbotz-google-oauth-client.json",
+        tokenPath: "~/.openclaw/secrets/gmail-token.json",
+      });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.GOOGLE_OAUTH_CREDENTIALS_PATH;
+      } else {
+        process.env.GOOGLE_OAUTH_CREDENTIALS_PATH = previous;
+      }
+    }
   });
 
   it("exposes Gmail pagination and forwards continuation tokens", () => {

@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { homedir } from "node:os";
-import { expandHome, SCOPES } from "./auth.js";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { expandHome, inspectAuthState, SCOPES } from "./auth.js";
 
 describe("expandHome", () => {
   it("returns homedir for '~'", () => {
@@ -59,5 +62,51 @@ describe("SCOPES", () => {
     // files it created itself, not files merely shared with the account.
     // That broke the "sharer controls access via Drive ACLs" mental model.
     expect(SCOPES).not.toContain("https://www.googleapis.com/auth/drive.file");
+  });
+});
+
+describe("inspectAuthState", () => {
+  it("reports platform, customer, and connected setup states without returning secrets", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "google-auth-state-"));
+    const credentialsPath = join(directory, "credentials.json");
+    const tokenPath = join(directory, "token.json");
+
+    try {
+      await expect(inspectAuthState({ credentialsPath, tokenPath })).resolves.toEqual({
+        clientConfigured: false,
+        connected: false,
+        status: "platform_setup_required",
+      });
+
+      await writeFile(
+        credentialsPath,
+        JSON.stringify({
+          installed: {
+            client_id: "test.apps.googleusercontent.com",
+            client_secret: "not-returned",
+            redirect_uris: ["http://localhost"],
+          },
+        })
+      );
+      await expect(inspectAuthState({ credentialsPath, tokenPath })).resolves.toEqual({
+        clientConfigured: true,
+        connected: false,
+        status: "connection_required",
+      });
+
+      await writeFile(
+        tokenPath,
+        JSON.stringify({ refresh_token: "not-returned", access_token: "not-returned" })
+      );
+      const connected = await inspectAuthState({ credentialsPath, tokenPath });
+      expect(connected).toEqual({
+        clientConfigured: true,
+        connected: true,
+        status: "connected",
+      });
+      expect(JSON.stringify(connected)).not.toContain("not-returned");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

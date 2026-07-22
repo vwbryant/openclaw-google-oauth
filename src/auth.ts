@@ -9,6 +9,12 @@ export interface AuthConfig {
   tokenPath: string;
 }
 
+export interface AuthState {
+  clientConfigured: boolean;
+  connected: boolean;
+  status: "platform_setup_required" | "connection_required" | "connected";
+}
+
 export const SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/gmail.send",
@@ -83,6 +89,43 @@ export async function buildAuthUrl(config: AuthConfig): Promise<string> {
     prompt: "consent",
     scope: SCOPES,
   });
+}
+
+export async function inspectAuthState(config: AuthConfig): Promise<AuthState> {
+  try {
+    await readCredentials(config.credentialsPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return {
+        clientConfigured: false,
+        connected: false,
+        status: "platform_setup_required",
+      };
+    }
+    throw error;
+  }
+
+  try {
+    const tokenRaw = await readFile(expandHome(config.tokenPath), "utf8");
+    const token = JSON.parse(tokenRaw) as { refresh_token?: unknown };
+    const connected =
+      typeof token.refresh_token === "string" && token.refresh_token.length > 0;
+
+    return {
+      clientConfigured: true,
+      connected,
+      status: connected ? "connected" : "connection_required",
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return {
+        clientConfigured: true,
+        connected: false,
+        status: "connection_required",
+      };
+    }
+    throw error;
+  }
 }
 
 export async function exchangeCode(

@@ -7,6 +7,7 @@ import plugin, {
 } from "./index.js";
 
 const expectedTools = [
+  "google_auth_status",
   "google_auth_start",
   "google_auth_complete",
   "gmail_messages_list",

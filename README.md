@@ -50,7 +50,7 @@ A single OpenClaw plugin that exposes 24 agent-callable tools spanning six Googl
 
 | Family | Tools |
 |---|---|
-| OAuth | `google_auth_start`, `google_auth_complete` |
+| OAuth | `google_auth_status`, `google_auth_start`, `google_auth_complete` |
 | Gmail | `gmail_messages_list`, `gmail_message_get`, `gmail_message_send`, `gmail_message_modify`, `gmail_message_trash` |
 | Calendar | `calendar_events_list`, `calendar_event_create`, `calendar_event_get`, `calendar_event_delete` |
 | Drive | `drive_files_list`, `drive_file_get`, `drive_permission_create`, `drive_file_trash` |

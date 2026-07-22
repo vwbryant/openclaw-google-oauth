@@ -6,6 +6,7 @@ import {
   buildAuthUrl,
   createOAuthClient,
   exchangeCode,
+  inspectAuthState,
   withTimeout,
 } from "./auth.js";
 import { encodeRfc2822 } from "./email.js";
@@ -60,6 +61,16 @@ export default defineToolPlugin({
   configSchema,
   tools: (tool) => [
     // ── OAuth setup ───────────────────────────────────────────────────────
+    tool({
+      name: "google_auth_status",
+      label: "Google Connection Status",
+      description:
+        "Report whether the Google connection is ready or requires setup without returning OAuth client or token values.",
+      parameters: Type.Object({}),
+      async execute(_params, config) {
+        return inspectAuthState(resolveAuthConfig(config));
+      },
+    }),
     tool({
       name: "google_auth_start",
       label: "Start Google OAuth",

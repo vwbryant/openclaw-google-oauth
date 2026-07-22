@@ -1,6 +1,6 @@
 {
   "name": "@jason-vaughan/openclaw-google-oauth",
-  "version": "0.4.1-taskbotz.1",
+  "version": "0.4.1-taskbotz.2",
   "description": "Google Workspace tools for your OpenClaw agent — Gmail, Calendar, Drive, Docs, Sheets, Slides via direct OAuth. 24 tools from one OAuth client. No MCP server to run, no third-party gateway, no IMAP App Password workaround. Install once, complete the OAuth dance, done.",
   "type": "module",
   "license": "MIT",
@@ -61,8 +61,11 @@
     "openclaw": ">=2026.5.17"
   },
   "dependencies": {
-    "googleapis": "^144.0.0",
+    "googleapis": "^173.0.0",
     "typebox": "^1.1.38"
+  },
+  "overrides": {
+    "google-auth-library": "10.9.0"
   },
   "devDependencies": {
     "openclaw": "latest",

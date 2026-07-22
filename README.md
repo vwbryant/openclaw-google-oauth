@@ -197,7 +197,7 @@ https://www.googleapis.com/auth/presentations
 
 ## Skills (shipped with the plugin)
 
-In addition to the 24 tools, this plugin ships an OpenClaw **skill** at [`skills/google-workspace/SKILL.md`](skills/google-workspace/SKILL.md). Skills are `SKILL.md` files that load into the agent's **system prompt** as an instructional layer — they don't compete with tools, they teach the agent *when* and *how* to use them.
+In addition to the 25 tools, this plugin ships an OpenClaw **skill** at [`skills/google-workspace/SKILL.md`](skills/google-workspace/SKILL.md). Skills are `SKILL.md` files that load into the agent's **system prompt** as an instructional layer — they don't compete with tools, they teach the agent *when* and *how* to use them.
 
 The `google-workspace` skill is automatically discovered by OpenClaw when this plugin is enabled (gated via `plugins.entries.tangleclaw-google-oauth.enabled`). It encodes:
 

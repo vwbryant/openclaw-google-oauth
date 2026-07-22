@@ -203,6 +203,20 @@ describe("openclaw.plugin.json spec compliance", () => {
     }
   });
 
+  it("declares every registered tool in contracts.tools", () => {
+    const declaredNames = new Set(
+      ((manifest.contracts as { tools: string[] }).tools) ?? []
+    );
+    const pluginMetadata = getToolPluginMetadata(plugin)!;
+
+    for (const registered of pluginMetadata.tools) {
+      expect(
+        declaredNames.has(registered.name),
+        `registered tool '${registered.name}' is missing from manifest contracts.tools`
+      ).toBe(true);
+    }
+  });
+
   it("every path in manifest.skills points to an existing directory inside the repo", () => {
     const skills = manifest.skills as string[] | undefined;
     if (!skills) return; // skills field optional for non-skill plugins

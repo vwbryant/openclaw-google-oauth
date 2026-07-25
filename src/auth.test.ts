@@ -115,6 +115,63 @@ describe("inspectAuthState", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("distinguishes revoked credentials from temporary provider failures", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "google-auth-probe-"));
+    const credentialsPath = join(directory, "credentials.json");
+    const tokenPath = join(directory, "token.json");
+
+    try {
+      await writeFile(
+        credentialsPath,
+        JSON.stringify({
+          installed: {
+            client_id: "test.apps.googleusercontent.com",
+            client_secret: "not-returned",
+            redirect_uris: ["http://localhost"]
+          }
+        })
+      );
+      await writeFile(tokenPath, JSON.stringify({ refresh_token: "not-returned" }));
+
+      await expect(inspectAuthState(
+        { credentialsPath, tokenPath },
+        {
+          probe: true,
+          accessProbe: async () => {
+            throw {
+              response: {
+                data: {
+                  error: "invalid_grant",
+                  error_description: "Token has been expired or revoked."
+                }
+              }
+            };
+          }
+        }
+      )).resolves.toEqual({
+        clientConfigured: true,
+        connected: false,
+        status: "reauthorization_required"
+      });
+
+      await expect(inspectAuthState(
+        { credentialsPath, tokenPath },
+        {
+          probe: true,
+          accessProbe: async () => {
+            throw new Error("network unavailable");
+          }
+        }
+      )).resolves.toEqual({
+        clientConfigured: true,
+        connected: true,
+        status: "temporarily_unavailable"
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("OAuth token storage", () => {

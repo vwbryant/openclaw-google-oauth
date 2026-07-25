@@ -13,7 +13,12 @@ export interface AuthConfig {
 export interface AuthState {
   clientConfigured: boolean;
   connected: boolean;
-  status: "platform_setup_required" | "connection_required" | "connected";
+  status:
+    | "platform_setup_required"
+    | "connection_required"
+    | "connected"
+    | "reauthorization_required"
+    | "temporarily_unavailable";
 }
 
 interface PendingAuthorization {
@@ -24,6 +29,8 @@ interface PendingAuthorization {
 }
 
 const AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
+const AUTH_PROBE_TTL_MS = 5 * 60 * 1000;
+const successfulAuthProbes = new Map<string, number>();
 
 export const SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
@@ -150,7 +157,13 @@ export async function beginAuthorization(
   });
 }
 
-export async function inspectAuthState(config: AuthConfig): Promise<AuthState> {
+export async function inspectAuthState(
+  config: AuthConfig,
+  options: {
+    probe?: boolean;
+    accessProbe?: (client: OAuth2Client) => Promise<unknown>;
+  } = {}
+): Promise<AuthState> {
   try {
     await readCredentials(config.credentialsPath);
   } catch (error) {
@@ -170,6 +183,40 @@ export async function inspectAuthState(config: AuthConfig): Promise<AuthState> {
     const connected =
       typeof token.refresh_token === "string" && token.refresh_token.length > 0;
 
+    if (connected && options.probe && !hasCurrentAuthProbe(config.tokenPath)) {
+      try {
+        const client = await createOAuthClient(config);
+        const accessToken = await withTimeout(
+          options.accessProbe
+            ? options.accessProbe(client)
+            : client.getAccessToken(),
+          "Google connection check",
+          10_000
+        );
+        if (!accessToken) {
+          return {
+            clientConfigured: true,
+            connected: false,
+            status: "reauthorization_required"
+          };
+        }
+        successfulAuthProbes.set(expandHome(config.tokenPath), Date.now());
+      } catch (error) {
+        if (isAuthorizationRevoked(error)) {
+          return {
+            clientConfigured: true,
+            connected: false,
+            status: "reauthorization_required"
+          };
+        }
+        return {
+          clientConfigured: true,
+          connected: true,
+          status: "temporarily_unavailable"
+        };
+      }
+    }
+
     return {
       clientConfigured: true,
       connected,
@@ -185,6 +232,34 @@ export async function inspectAuthState(config: AuthConfig): Promise<AuthState> {
     }
     throw error;
   }
+}
+
+function hasCurrentAuthProbe(configuredTokenPath: string): boolean {
+  const checkedAt = successfulAuthProbes.get(expandHome(configuredTokenPath));
+  return typeof checkedAt === "number" && Date.now() - checkedAt < AUTH_PROBE_TTL_MS;
+}
+
+function isAuthorizationRevoked(error: unknown): boolean {
+  const candidates: unknown[] = [error];
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    candidates.push(record.message, record.code);
+    if (typeof record.response === "object" && record.response !== null) {
+      const response = record.response as Record<string, unknown>;
+      candidates.push(response.data);
+      if (typeof response.data === "object" && response.data !== null) {
+        const data = response.data as Record<string, unknown>;
+        candidates.push(data.error, data.error_description);
+      }
+    }
+  }
+
+  return candidates.some((candidate) =>
+    typeof candidate === "string" &&
+    /invalid_grant|invalid_token|unauthorized_client|token has been expired or revoked/i.test(
+      candidate
+    )
+  );
 }
 
 export async function exchangeCode(

@@ -68,9 +68,13 @@ export default defineToolPlugin({
       label: "Google Connection Status",
       description:
         "Report whether the Google connection is ready or requires setup without returning OAuth client or token values.",
-      parameters: Type.Object({}),
-      async execute(_params, config) {
-        return inspectAuthState(resolveAuthConfig(config));
+      parameters: Type.Object({
+        probe: Type.Optional(Type.Boolean())
+      }),
+      async execute(params, config) {
+        return inspectAuthState(resolveAuthConfig(config), {
+          probe: params.probe === true
+        });
       },
     }),
     tool({

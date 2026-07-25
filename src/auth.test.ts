@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { homedir } from "node:os";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -163,8 +163,12 @@ describe("OAuth token storage", () => {
       expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
       expect(authUrl.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
+      const pendingFile = (await readdir(directory)).find((file) =>
+        file.includes("oauth-pending")
+      );
+      expect(pendingFile).toBeTruthy();
       const pending = JSON.parse(
-        await readFile(`${tokenPath}.oauth-pending.json`, "utf8")
+        await readFile(join(directory, pendingFile!), "utf8")
       ) as Record<string, unknown>;
       expect(pending).toMatchObject({
         state: "signed-state",
@@ -186,5 +190,71 @@ describe("OAuth token storage", () => {
         state: "signed-state"
       }
     )).rejects.toThrow("must use HTTPS");
+  });
+
+  it("requires hosted callbacks to be registered on a Web application client", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "google-auth-web-callback-"));
+    const credentialsPath = join(directory, "credentials.json");
+    const tokenPath = join(directory, "token.json");
+
+    try {
+      await writeFile(
+        credentialsPath,
+        JSON.stringify({
+          web: {
+            client_id: "test.apps.googleusercontent.com",
+            client_secret: "not-returned",
+            redirect_uris: ["https://app.taskbotz.example/api/oauth/google/callback"]
+          }
+        })
+      );
+      await expect(beginAuthorization(
+        { credentialsPath, tokenPath },
+        {
+          redirectUri: "https://other.taskbotz.example/api/oauth/google/callback",
+          state: "signed-state"
+        }
+      )).rejects.toThrow("not registered");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps concurrent pending authorizations separate", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "google-auth-concurrent-"));
+    const credentialsPath = join(directory, "credentials.json");
+    const tokenPath = join(directory, "token.json");
+
+    try {
+      await writeFile(
+        credentialsPath,
+        JSON.stringify({
+          installed: {
+            client_id: "test.apps.googleusercontent.com",
+            client_secret: "not-returned",
+            redirect_uris: ["http://localhost"]
+          }
+        })
+      );
+      await beginAuthorization(
+        { credentialsPath, tokenPath },
+        {
+          redirectUri: "http://127.0.0.1:5177/api/oauth/google/callback",
+          state: "state-one"
+        }
+      );
+      await beginAuthorization(
+        { credentialsPath, tokenPath },
+        {
+          redirectUri: "http://127.0.0.1:5177/api/oauth/google/callback",
+          state: "state-two"
+        }
+      );
+      expect(
+        (await readdir(directory)).filter((file) => file.includes("oauth-pending"))
+      ).toHaveLength(2);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { CodeChallengeMethod, type OAuth2Client } from "google-auth-library";
@@ -61,13 +61,15 @@ interface InstalledCredentials {
 async function readCredentials(credentialsPath: string) {
   const raw = await readFile(expandHome(credentialsPath), "utf8");
   const parsed = JSON.parse(raw) as InstalledCredentials;
-  const creds = parsed.installed ?? parsed.web;
-  if (!creds) {
-    throw new Error(
-      `Credentials file at ${credentialsPath} is missing "installed" or "web" block`
-    );
+  if (parsed.installed) {
+    return { ...parsed.installed, clientType: "installed" as const };
   }
-  return creds;
+  if (parsed.web) {
+    return { ...parsed.web, clientType: "web" as const };
+  }
+  throw new Error(
+    `Credentials file at ${credentialsPath} is missing "installed" or "web" block`
+  );
 }
 
 export async function createOAuthClient(
@@ -122,6 +124,8 @@ export async function beginAuthorization(
   now = new Date()
 ): Promise<string> {
   assertCallbackUri(options.redirectUri);
+  const credentials = await readCredentials(config.credentialsPath);
+  assertCallbackMatchesClient(credentials, options.redirectUri);
   if (!options.state || options.state.length > 4096) {
     throw new Error("OAuth state is required and must be 4096 characters or fewer.");
   }
@@ -136,8 +140,8 @@ export async function beginAuthorization(
     codeVerifier,
     expiresAt: new Date(now.getTime() + AUTHORIZATION_TTL_MS).toISOString()
   };
-  const pendingPath = await preparePendingAuthorizationPath(config.tokenPath);
-  await writeFile(pendingPath, JSON.stringify(pending), { mode: 0o600 });
+  const pendingPath = await preparePendingAuthorizationPath(config.tokenPath, options.state);
+  await writePrivateJsonAtomically(pendingPath, pending);
 
   return buildAuthUrl(config, {
     redirectUri: options.redirectUri,
@@ -202,7 +206,7 @@ export async function exchangeCode(
     );
   }
   const tokenPath = await prepareTokenPath(config.tokenPath);
-  await writeFile(tokenPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+  await writePrivateJsonAtomically(tokenPath, tokens);
   return {
     tokenPath,
     scopes: (tokens.scope ?? "").split(" ").filter(Boolean),
@@ -214,7 +218,7 @@ export async function exchangePendingAuthorization(
   options: { code: string; state: string },
   now = new Date()
 ): Promise<{ tokenPath: string; scopes: string[] }> {
-  const pendingPath = pendingAuthorizationPath(config.tokenPath);
+  const pendingPath = pendingAuthorizationPath(config.tokenPath, options.state);
   const pending = JSON.parse(
     await readFile(pendingPath, "utf8")
   ) as Partial<PendingAuthorization>;
@@ -248,14 +252,18 @@ export async function prepareTokenPath(configuredTokenPath: string): Promise<str
   return tokenPath;
 }
 
-async function preparePendingAuthorizationPath(configuredTokenPath: string): Promise<string> {
-  const path = pendingAuthorizationPath(configuredTokenPath);
+async function preparePendingAuthorizationPath(
+  configuredTokenPath: string,
+  state: string
+): Promise<string> {
+  const path = pendingAuthorizationPath(configuredTokenPath, state);
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   return path;
 }
 
-function pendingAuthorizationPath(configuredTokenPath: string): string {
-  return `${expandHome(configuredTokenPath)}.oauth-pending.json`;
+function pendingAuthorizationPath(configuredTokenPath: string, state: string): string {
+  const stateId = createHash("sha256").update(state).digest("hex").slice(0, 24);
+  return `${expandHome(configuredTokenPath)}.oauth-pending-${stateId}.json`;
 }
 
 function assertCallbackUri(value: string): void {
@@ -269,6 +277,48 @@ function assertCallbackUri(value: string): void {
   }
   if (url.username || url.password || url.hash) {
     throw new Error("OAuth callback URL contains unsupported components.");
+  }
+}
+
+function assertCallbackMatchesClient(
+  credentials: {
+    clientType: "installed" | "web";
+    redirect_uris: string[];
+  },
+  redirectUri: string
+): void {
+  if (credentials.clientType === "web") {
+    if (!credentials.redirect_uris.includes(redirectUri)) {
+      throw new Error(
+        "OAuth callback is not registered in the Google Web application client."
+      );
+    }
+    return;
+  }
+
+  const callback = new URL(redirectUri);
+  if (
+    callback.hostname !== "localhost" &&
+    callback.hostname !== "127.0.0.1" &&
+    callback.hostname !== "::1"
+  ) {
+    throw new Error(
+      "Hosted TaskBotz callbacks require a Google Web application OAuth client."
+    );
+  }
+}
+
+async function writePrivateJsonAtomically(path: string, value: unknown): Promise<void> {
+  const temporaryPath = `${path}.${randomBytes(8).toString("hex")}.tmp`;
+  await writeFile(temporaryPath, JSON.stringify(value, null, 2), {
+    mode: 0o600,
+    flag: "wx"
+  });
+  try {
+    await rename(temporaryPath, path);
+  } catch (error) {
+    await rm(temporaryPath, { force: true });
+    throw error;
   }
 }
 

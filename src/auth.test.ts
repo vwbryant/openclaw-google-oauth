@@ -3,7 +3,13 @@ import { homedir } from "node:os";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { expandHome, inspectAuthState, prepareTokenPath, SCOPES } from "./auth.js";
+import {
+  beginAuthorization,
+  expandHome,
+  inspectAuthState,
+  prepareTokenPath,
+  SCOPES
+} from "./auth.js";
 
 describe("expandHome", () => {
   it("returns homedir for '~'", () => {
@@ -123,5 +129,62 @@ describe("OAuth token storage", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it("creates a state-bound PKCE authorization URL for a TaskBotz callback", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "google-auth-pkce-"));
+    const credentialsPath = join(directory, "credentials.json");
+    const tokenPath = join(directory, "token.json");
+
+    try {
+      await writeFile(
+        credentialsPath,
+        JSON.stringify({
+          web: {
+            client_id: "test.apps.googleusercontent.com",
+            client_secret: "not-returned",
+            redirect_uris: ["https://taskbotz.example/api/oauth/google/callback"]
+          }
+        })
+      );
+      const authUrl = new URL(await beginAuthorization(
+        { credentialsPath, tokenPath },
+        {
+          redirectUri: "https://taskbotz.example/api/oauth/google/callback",
+          state: "signed-state"
+        },
+        new Date("2026-07-25T12:00:00.000Z")
+      ));
+
+      expect(authUrl.searchParams.get("redirect_uri")).toBe(
+        "https://taskbotz.example/api/oauth/google/callback"
+      );
+      expect(authUrl.searchParams.get("state")).toBe("signed-state");
+      expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+      expect(authUrl.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+      const pending = JSON.parse(
+        await readFile(`${tokenPath}.oauth-pending.json`, "utf8")
+      ) as Record<string, unknown>;
+      expect(pending).toMatchObject({
+        state: "signed-state",
+        redirectUri: "https://taskbotz.example/api/oauth/google/callback",
+        expiresAt: "2026-07-25T12:10:00.000Z"
+      });
+      expect(pending.codeVerifier).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(JSON.stringify(pending)).not.toContain("not-returned");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects insecure non-loopback callbacks", async () => {
+    await expect(beginAuthorization(
+      { credentialsPath: "/unused", tokenPath: "/unused" },
+      {
+        redirectUri: "http://taskbotz.example/api/oauth/google/callback",
+        state: "signed-state"
+      }
+    )).rejects.toThrow("must use HTTPS");
   });
 });

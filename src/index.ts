@@ -3,9 +3,11 @@ import { google } from "googleapis";
 import { defineToolPlugin } from "openclaw/plugin-sdk/tool-plugin";
 import {
   AuthConfig,
+  beginAuthorization,
   buildAuthUrl,
   createOAuthClient,
   exchangeCode,
+  exchangePendingAuthorization,
   inspectAuthState,
   withTimeout,
 } from "./auth.js";
@@ -76,13 +78,25 @@ export default defineToolPlugin({
       label: "Start Google OAuth",
       description:
         "Start a fresh Google OAuth authorization flow. Returns a URL the human must open in a browser to grant access. Only call this if the existing token has expired (invalid_grant errors) or if scopes need to be widened. Reads OAuth client credentials from configured credentialsPath.",
-      parameters: Type.Object({}),
-      async execute(_params, config) {
-        const url = await buildAuthUrl(resolveAuthConfig(config));
+      parameters: Type.Object({
+        redirectUri: Type.Optional(Type.String()),
+        state: Type.Optional(Type.String())
+      }),
+      async execute(params, config) {
+        const authConfig = resolveAuthConfig(config);
+        const url =
+          params.redirectUri && params.state
+            ? await beginAuthorization(authConfig, {
+                redirectUri: params.redirectUri,
+                state: params.state
+              })
+            : await buildAuthUrl(authConfig);
         return {
           authUrl: url,
           instructions:
-            "Open authUrl in a browser, sign in with the target Google account, click through any 'unverified app' warning, grant the requested scopes, and copy the `code` query parameter from the redirected URL. Then call google_auth_complete with that code.",
+            params.redirectUri
+              ? "Open authUrl in a browser and complete Google consent. The configured application callback will finish the connection."
+              : "Open authUrl in a browser, sign in with the target Google account, grant the requested scopes, and return the authorization code.",
         };
       },
     }),
@@ -95,9 +109,15 @@ export default defineToolPlugin({
         code: Type.String({
           description: "The `code` query parameter returned by Google after consent.",
         }),
+        state: Type.Optional(Type.String({
+          description: "The state returned by Google for a TaskBotz-managed callback."
+        }))
       }),
-      async execute({ code }, config) {
-        const result = await exchangeCode(resolveAuthConfig(config), code);
+      async execute({ code, state }, config) {
+        const authConfig = resolveAuthConfig(config);
+        const result = state
+          ? await exchangePendingAuthorization(authConfig, { code, state })
+          : await exchangeCode(authConfig, code);
         return {
           ok: true,
           tokenPath: result.tokenPath,

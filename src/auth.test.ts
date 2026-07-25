@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { homedir } from "node:os";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { expandHome, inspectAuthState, SCOPES } from "./auth.js";
+import { expandHome, inspectAuthState, prepareTokenPath, SCOPES } from "./auth.js";
 
 describe("expandHome", () => {
   it("returns homedir for '~'", () => {
@@ -105,6 +105,21 @@ describe("inspectAuthState", () => {
         status: "connected",
       });
       expect(JSON.stringify(connected)).not.toContain("not-returned");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("OAuth token storage", () => {
+  it("creates the private token directory on a fresh tenant volume", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "google-auth-token-"));
+    const tokenPath = join(directory, "secrets", "gmail-token.json");
+
+    try {
+      await expect(prepareTokenPath(tokenPath)).resolves.toBe(tokenPath);
+      await writeFile(tokenPath, "connected", { mode: 0o600 });
+      await expect(readFile(tokenPath, "utf8")).resolves.toBe("connected");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

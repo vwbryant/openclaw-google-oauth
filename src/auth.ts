@@ -1,7 +1,7 @@
 import { google } from "googleapis";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import type { OAuth2Client } from "google-auth-library";
 
 export interface AuthConfig {
@@ -140,12 +140,18 @@ export async function exchangeCode(
         "https://myaccount.google.com/permissions then retry with prompt=consent."
     );
   }
-  const tokenPath = expandHome(config.tokenPath);
+  const tokenPath = await prepareTokenPath(config.tokenPath);
   await writeFile(tokenPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
   return {
     tokenPath,
     scopes: (tokens.scope ?? "").split(" ").filter(Boolean),
   };
+}
+
+export async function prepareTokenPath(configuredTokenPath: string): Promise<string> {
+  const tokenPath = expandHome(configuredTokenPath);
+  await mkdir(dirname(tokenPath), { recursive: true, mode: 0o700 });
+  return tokenPath;
 }
 
 export async function withTimeout<T>(
